@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pátio Industrial 3D Interativo</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10151d;color:#f7f8fb;font-family:Arial,sans-serif}
+#view{position:fixed;inset:0}canvas{display:block;width:100%;height:100%;touch-action:none}
+header{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:8px;align-items:center;justify-content:space-between;z-index:3;pointer-events:none}
+h1{font-size:15px;margin:0;text-shadow:0 2px 6px #000;pointer-events:none}
+.controls{display:flex;gap:7px;pointer-events:auto}
+button{border:1px solid #718096;background:#17212d;color:white;border-radius:12px;padding:10px 12px;font-size:14px}
+#info{position:fixed;left:12px;right:12px;bottom:12px;z-index:4;background:#111923eF;border:1px solid #657387;border-radius:14px;padding:12px;font-size:13px;line-height:1.4;max-height:28vh;overflow:auto}
+#hint{opacity:.82}#walkpad{display:none;position:fixed;bottom:130px;left:50%;transform:translateX(-50%);z-index:4;gap:12px}
+#walkpad button{width:54px;height:48px;font-size:20px}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<header><h1>PÁTIO INDUSTRIAL · MODELO 3D</h1><div class="controls"><button id="air">Visão aérea</button><button id="walk">Caminhar</button><button id="reset">Recentralizar</button></div></header>
+<div id="walkpad"><button data-move="left">←</button><button data-move="forward">↑</button><button data-move="right">→</button><button data-move="back">↓</button></div>
+<div id="info"><b>Explore o pátio</b><div id="hint">Arraste para girar • pinça para aproximar • toque nos prédios e equipamentos para ver informações. Modelo conceitual aproximado da imagem de referência.</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const root=document.getElementById('view'), info=document.getElementById('info');
+if(!window.THREE){info.innerHTML='<b>Não foi possível carregar o 3D.</b><br>Verifique a conexão e recarregue a página.';return;}
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x101722);scene.fog=new THREE.Fog(0x101722,85,170);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,400);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;root.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc9dcff,0x4b493c,1.25));
+const sun=new THREE.DirectionalLight(0xffd49a,1.65);sun.position.set(-35,55,25);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
+function mat(c,r=.85){return new THREE.MeshStandardMaterial({color:c,roughness:r});}
+const asphalt=mat(0x343b43), concrete=mat(0x777b79), roof=mat(0x303943), wall=mat(0xb8b6a9), yellow=mat(0xf2c12e), white=mat(0xe8e8e2), glass=mat(0x263f50,.3), green=mat(0x244b32);
+function box(name,x,y,z,w,h,d,m,desc){let o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y+h/2,z);o.castShadow=true;o.receiveShadow=true;o.userData={name,desc};scene.add(o);return o;}
+box('Terreno',0,-.6,0,100,.5,90,green,'Área externa do complexo industrial.');
+box('Pátio e vias',0,-.32,0,84,.12,72,asphalt,'Vias internas para circulação de veículos e pedestres.');
+// roads markings
+for(let z=-34;z<=34;z+=5)box('Faixa central',0,-.19,z,.22,.025,2.1,yellow,'Faixa de divisão da via.');
+for(let i=-3;i<=3;i++)box('Faixa de pedestres',i*1.45,-.17,7,0.85,.04,4,white,'Travessia sinalizada para pedestres.');
+function building(name,x,z,w,d,h,desc){box(name,x,0,z,w,h,d,wall,desc);box(name+' telhado',x,h,z,w+1,.45,d+1,roof,desc);for(let i=-1;i<=1;i++){box('Portão '+name,x+i*w*.25,.3,z+d/2+.035,w*.15,2.4,.08,glass,'Acesso ao edifício.');}}
+building('Galpão de produção',-7,-26,35,17,7,'Galpão principal destinado à produção.');
+building('Almoxarifado',27,-25,16,16,5,'Área de armazenamento de materiais e equipamentos.');
+building('Manutenção',-27,22,22,15,4.5,'Setor de manutenção de veículos e equipamentos.');
+// guardhouse
+box('Portaria',0,0,34,7,3,6,wall,'Controle de entrada e saída de veículos.');box('Cobertura da portaria',0,3,34,8,.35,7,roof,'Cobertura da portaria.');
+// parking bays
+for(let i=0;i<5;i++){let x=18+i*4.2;box('Vaga de estacionamento',x,-.15,22,3.4,.035,8,white,'Vaga destinada aos funcionários.');let car=box('Veículo estacionado',x,-.05,22,2.2,1.25,4.1,[mat(0xd9e0e5),mat(0x202b38),mat(0x9f2525)][i%3],'Veículo de funcionário no estacionamento.');}
+function pole(name,x,z,desc,color=0xffa51e){box(name+' poste',x,0,z,.22,3,.22,mat(0x343a40),desc);let lamp=new THREE.Mesh(new THREE.SphereGeometry(.38,16,12),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:1.8}));lamp.position.set(x,3.1,z);lamp.userData={name,desc};scene.add(lamp);return lamp;}
+function solar(x,z){let cart=box('Painel solar móvel',x,0,z,2.8,1.2,1.8,mat(0x6a7078),'Painel solar móvel com bateria para alimentar os equipamentos sem ligação direta à rede elétrica.');let panel=box('Painel solar',x,2,z,3.3,.12,2.2,mat(0x174b83),'Painel fotovoltaico que fornece energia ao sistema.');panel.rotation.x=-.25;pole('Sinalizador LED',x+2,z,'Sinalizador visual de alerta para motoristas.');}
+solar(-36,28);solar(36,28);
+pole('Sensor radar',-39,-6,'Sensor radar com alcance indicado de 20 metros para detectar a aproximação de veículos.');
+pole('Sensor radar',39,-6,'Sensor radar com alcance indicado de 20 metros para detectar a aproximação de veículos.');
+pole('Sensor de presença',-35,7,'Sensor de presença para identificar pedestres próximos à faixa.');
+pole('Sensor de presença',35,7,'Sensor de presença para identificar pedestres próximos à faixa.');
+pole('Sinalização LED',0,10,'Sinalização LED que alerta motoristas quando há pedestres na travessia.');
+// simple truck
+let truck=box('Caminhão',0,0,-3,11,2.6,3.2,mat(0xbfc8d0),'Veículo pesado em circulação: deve respeitar a velocidade e a preferência do pedestre.');box('Cabine do caminhão',5.2,.2,-3,2.2,2.2,3,mat(0xdce2e6),'Cabine do caminhão.');
+// fence perimeter
+for(let x=-43;x<=43;x+=3){box('Cerca',x,0,-38,.12,1.5,.12,mat(0x737e85),'Cercamento do pátio.');box('Cerca',x,0,38,.12,1.5,.12,mat(0x737e85),'Cercamento do pátio.');}
+for(let z=-38;z<=38;z+=3){box('Cerca',-43,0,z,.12,1.5,.12,mat(0x737e85),'Cercamento do pátio.');box('Cerca',43,0,z,.12,1.5,.12,mat(0x737e85),'Cercamento do pátio.');}
+let target=new THREE.Vector3(0,0,0),radius=88,theta=.72,phi=1.05,walking=false,walkX=0,walkZ=0;
+function updateCam(){if(walking){camera.position.set(walkX,2.2,walkZ);camera.lookAt(walkX+Math.sin(theta)*4,2,walkZ-Math.cos(theta)*4);}else{camera.position.set(target.x+radius*Math.sin(phi)*Math.sin(theta),radius*Math.cos(phi),target.z+radius*Math.sin(phi)*Math.cos(theta));camera.lookAt(target);}}
+updateCam();
+let pointers=new Map(),lastX=0,lastY=0,lastDist=0;
+renderer.domElement.addEventListener('pointerdown',e=>{renderer.domElement.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});lastX=e.clientX;lastY=e.clientY;if(pointers.size===2){let a=[...pointers.values()];lastDist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);}});
+renderer.domElement.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){let dx=e.clientX-lastX,dy=e.clientY-lastY;theta-=dx*.006;phi=Math.max(.18,Math.min(1.48,phi+dy*.005));if(walking)updateCam();else updateCam();}else if(pointers.size===2){let a=[...pointers.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);radius=Math.max(22,Math.min(145,radius+(lastDist-d)*.16));lastDist=d;updateCam();}lastX=e.clientX;lastY=e.clientY;});
+function pointerEnd(e){pointers.delete(e.pointerId);}renderer.domElement.addEventListener('pointerup',pointerEnd);renderer.domElement.addEventListener('pointercancel',pointerEnd);
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();renderer.domElement.addEventListener('click',e=>{let r=renderer.domElement.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;ray.setFromCamera(mouse,camera);let hit=ray.intersectObjects(scene.children,true).find(h=>h.object.userData.name);if(hit){let u=hit.object.userData;info.innerHTML='<b>'+u.name+'</b><div>'+u.desc+'</div><div id="hint">Toque em outro elemento para explorar.</div>';}});
+document.getElementById('air').onclick=()=>{walking=false;document.getElementById('walkpad').style.display='none';radius=88;phi=1.05;updateCam();};
+document.getElementById('walk').onclick=()=>{walking=!walking;document.getElementById('walkpad').style.display=walking?'flex':'none';walkX=0;walkZ=32;updateCam();info.innerHTML='<b>Modo caminhada</b><div>Use as setas na tela para se deslocar pelo pátio. Arraste para olhar ao redor.</div>';};
+document.getElementById('reset').onclick=()=>{walking=false;document.getElementById('walkpad').style.display='none';theta=.72;phi=1.05;radius=88;target.set(0,0,0);updateCam();};
+document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{let s=2.4;let f=new THREE.Vector3(Math.sin(theta),0,-Math.cos(theta));let side=new THREE.Vector3(Math.cos(theta),0,Math.sin(theta));let m=b.dataset.move;if(m==='forward'){walkX+=f.x*s;walkZ+=f.z*s;}if(m==='back'){walkX-=f.x*s;walkZ-=f.z*s;}if(m==='left'){walkX-=side.x*s;walkZ-=side.z*s;}if(m==='right'){walkX+=side.x*s;walkZ+=side.z*s;}walkX=Math.max(-40,Math.min(40,walkX));walkZ=Math.max(-35,Math.min(35,walkZ));updateCam();});
+function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+})();
+</script>
+</body>
+</html>
